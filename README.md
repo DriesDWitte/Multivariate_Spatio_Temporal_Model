@@ -4,3 +4,5 @@ This repository contains the data and code used for the analyses in the paper "A
 In the "data" folder, the data that were used for the analyses can be found together with the files necessary to create maps of Cuba in R.
 
 The "R scripts" folder contains the R scripts that were used for fitting the univariate and multivariate models together with the R script for the exploratory data analysis.
+
+Questions regarding the data or the R scripts can be send to dries.dewitte@kuleuven.be
