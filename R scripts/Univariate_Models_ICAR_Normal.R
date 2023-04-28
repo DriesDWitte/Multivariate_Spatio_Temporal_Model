@@ -34,7 +34,7 @@ y_imported_cases <- weekly_data_Cuba_COVID_2021_population_lag$Imported
 
 e = structure(.Data = Population_size_municipalities, .Dim = c(44, 168))
 e = t(e)
-y = structure(.Data = y_deaths, .Dim = c(44, 168))
+y = structure(.Data = y_imported_cases, .Dim = c(44, 168))
 y = t(y)
 
 T <- 44
@@ -48,12 +48,17 @@ sumNumNeigh <-  sum(num)
 sumNumNeigh
 L <- sum(num)
 
+pop_density <- weekly_data_Cuba_COVID_2021_population_lag$pop_density_devided
+
+x = structure(.Data = pop_density, .Dim = c(44, 168))
+x = t(x)
+
 #constants
-LSTConsts<-list(T, m, adj, sumNumNeigh, num, L, e)
-names(LSTConsts) <-c("T","m","adj","sumNumNeigh","num", "L", "e")
+LSTConsts<-list(T, m, adj, sumNumNeigh, num, L, e, x)
+names(LSTConsts) <-c("T","m","adj","sumNumNeigh","num", "L", "e", "x")
 
 #data
-y = structure(.Data = y_deaths, .Dim = c(44, 168))
+y = structure(.Data = y_imported_cases, .Dim = c(44, 168))
 y = t(y)
 LSTData <- list(y)
 names(LSTData) <- c("y")
@@ -66,9 +71,9 @@ names(LSTData) <- c("y")
 #make cluster
 detectCores()
 nbcores <- 4
-my_cluster <- makeCluster(nbcores)
+my_cluster2 <- makeCluster(nbcores)
 
-LSTinits_RW1_int <-list(a0=-12,
+LSTinits_RW1_int <-list(a0=-12, b1=0,
                             sdv=0.1,
                             sdg=0.1,sdu=0.1, sdpsi=0.1,
                             g=c(0,0,0,0,0,0,0,0,0,0,
@@ -94,7 +99,7 @@ LSTinits_RW1_int <-list(a0=-12,
                             psi=structure(.Data=rep(0.1,7392),.Dim=c(168,44)))
 
 params_RW1_int <- c("a0", "sdu", "sdv", "sdg", "sdpsi",
-                        "exp_u", "exp_g", "u_exced")
+                        "exp_u", "exp_g", "u_exced", "b1", "mspe")
 
 workflow_RW1_int <- function(seed, data, cst, inits, prms) {
   
@@ -108,7 +113,7 @@ workflow_RW1_int <- function(seed, data, cst, inits, prms) {
         {y[i,k]~dpois(mu[i,k])
           pred_y[i,k]~dpois(mu[i,k])
           log(mu[i,k])<-log(e[i,k])+log(theta[i,k])
-          log(theta[i,k])<-a0+g[k]+u[i]+v[i]+psi[i,k]
+          log(theta[i,k])<-a0+g[k]+u[i]+v[i]+psi[i,k]+b1*x[i,k]
           psi[i,k]~dnorm(0,taupsi)
           Dp[i,k]<-(y[i,k]- pred_y[i,k])**2
           
@@ -147,6 +152,8 @@ workflow_RW1_int <- function(seed, data, cst, inits, prms) {
       sdpsi~dunif(0,10)
       
       a0~dflat()
+      b1~dnorm(0, sd = 100)
+      
       mspe <-mean(Dp[1:m,1:T])
       
     })
@@ -164,15 +171,17 @@ workflow_RW1_int <- function(seed, data, cst, inits, prms) {
   C_RW1_intMCMC <- compileNimble(RW1_intMCMC)
   
   RW1_int_samples <- runMCMC(mcmc = C_RW1_intMCMC, 
-                            niter = 1100000, 
-                            nburnin = 100000,
-                            thin = 1000,
+                            niter = 110000, 
+                            nburnin = 10000,
+                            thin = 100,
                             setSeed = seed)
   
   return(RW1_int_samples)
 }
 
-output <- parLapply(cl = my_cluster, 
+options(scipen=999)
+
+output <- parLapply(cl = my_cluster2, 
                     X = c(222, 666, 444, 555),
                     fun = workflow_RW1_int,
                     data = LSTData,
@@ -181,7 +190,7 @@ output <- parLapply(cl = my_cluster,
                     prms = params_RW1_int)
 output
 options(max.print=10000)
-MCMCsummary(output, params = c("a0", "sdg", "sdv", "sdu", "sdpsi", "mspe"))
+MCMCsummary(output, params = c("a0", "sdg", "sdv", "sdu", "sdpsi", "mspe", "b1"))
 MCMCsummary(output, params = "a0")
 MCMCtrace(output, params = "exp_v")
 
